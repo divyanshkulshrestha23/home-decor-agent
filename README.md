@@ -103,7 +103,7 @@ rough check that the vectors mean something, not a search accuracy score.
 
 ## Step 2b: Find-similar agent
 
-An ADK agent (`agent/agent.py`, model `gemini-3.5-flash-lite` by default) reads the shopper's
+An ADK agent (`agent/agent.py`, model `gemini-3.5-flash` by default) reads the shopper's
 photo, voice note and text, turns any firm limits into filters, and calls one tool,
 `find_similar_products` (`agent/tools.py`). The tool:
 
@@ -208,6 +208,20 @@ limits in 100%; one search per request in 88.9%. Main failures: no category set 
 text-only requests, plural category names, and colour preferences ("I'd like green")
 turned into hard filters. Fixes: categories are normalised in code, and the instructions
 and tool descriptions now say when to set categories and when to leave colour empty.
+
+After the fixes, both models on the same 30 requests x 3 runs:
+
+| Metric | gemini-3.5-flash-lite | gemini-3.5-flash |
+|---|---|---|
+| Filters exactly right | 94.4% | 100% |
+| Requests right in all 3 runs | 90.0% | 100% |
+| Same filters in every run | 73.3% | 86.7% |
+| Returned products within the limits | 100% | 100% |
+| One search per request | 97.8% | 100% |
+
+Flash-Lite's remaining misses: "only real leather sofas" never became a material filter, and
+"rugs" instead of "rug" (now mapped by the tool, so no longer a real failure). The agents use
+`gemini-3.5-flash`: about 5 times the cost per request, still around one to two rupees.
 
 ### Known data limits
 

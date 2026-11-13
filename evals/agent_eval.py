@@ -25,6 +25,8 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
+from agent.tools import normalize_categories
+
 CASES_FILE = Path("evals/data/agent_cases.json")
 RESULTS_FILE = Path("evals/results/agent_eval.json")
 SIZE_TOLERANCE_CM = 3
@@ -93,6 +95,9 @@ def grade_run(case, result):
                 "problems": ["no search"], "args": None}
     first = calls[0]
     args = {k: v for k, v in (first["args"] or {}).items() if k in FILTER_KEYS}
+    if "categories" in args:
+        # Grade what the tool searched with: it maps "rugs" to "rug" before searching.
+        args["categories"] = normalize_categories(args["categories"])
     problems = check_filters(case.get("expect", {}), case.get("forbid", []), args)
     response = first.get("response") or {}
     broken = check_results(args, response.get("results", [])) if "results" in response else None

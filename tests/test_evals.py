@@ -135,6 +135,12 @@ def test_grade_run():
     assert none["problems"] == ["no search"]
 
 
+def test_grade_run_normalizes_categories_like_the_tool():
+    case = {"expect": {"categories": ["rug"]}, "forbid": []}
+    graded = agent_eval.grade_run(case, {"tool_calls": [call({"categories": ["Rugs"]}, [])]})
+    assert graded["filters_ok"] is True and graded["args"]["categories"] == ["rug"]
+
+
 def test_agent_summary_consistency():
     ok = {"filters_ok": True, "results_ok": True, "one_search": True, "problems": [], "args": {"a": 1}}
     other = dict(ok, args={"a": 2})
