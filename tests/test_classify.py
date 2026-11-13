@@ -34,6 +34,9 @@ from tests.fixtures import listing
         ("/Categories/Furniture/Garden & Outdoor Furniture/Patio Sofas", "outdoor_furniture"),
         ("/Categories/Patio Furniture & Accessories/Umbrellas & Shade/Umbrellas", "outdoor_decor"),
         ("/Categories/Lighting & Ceiling Fans/Outdoor Lighting/Torches", "lighting"),
+        ("/Categories/Home Storage & Organization/Racks, Shelves & Drawers/Storage Drawer Units", "storage"),
+        ("/Categories/Home Storage & Organization/Laundry Organization/Laundry Bins", "small_storage"),
+        ("/Categories/Storage & Organization/Clothing & Closet Storage/Closet Systems", "storage"),
     ],
 )
 def test_paths_map_to_categories(path, category):
