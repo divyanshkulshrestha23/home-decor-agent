@@ -121,6 +121,20 @@ def test_embedder_retries_rate_limits_then_succeeds():
     assert client.models.calls[0] == ("gemini-embedding-2", 2)
 
 
+def test_embedder_retries_network_errors():
+    ConnectError = type("ConnectError", (Exception,), {})  # same name as httpx's
+    client = FakeClient([ConnectError("Temporary failure in name resolution"), OSError("reset"), [1.0]])
+    sleeps = []
+    assert emb.make_embedder(client, dims=1, sleep=sleeps.append)(object()) == [1.0]
+    assert sleeps == [1, 2]
+
+
+def test_embedder_does_not_retry_unexpected_errors():
+    embed = emb.make_embedder(FakeClient([ValueError("bad input")]), sleep=lambda s: None)
+    with pytest.raises(ValueError):
+        embed(object())
+
+
 def test_embedder_does_not_retry_client_errors():
     embed = emb.make_embedder(FakeClient([api_error(403)]), sleep=lambda s: None)
     with pytest.raises(Exception) as info:

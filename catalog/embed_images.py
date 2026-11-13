@@ -28,6 +28,9 @@ MAX_TEXT_CHARS = 300
 RETRY_CODES = {429, 500, 502, 503, 504}
 MAX_ATTEMPTS = 6
 STOP_AFTER_FAILURES = 5  # stop early if the first calls all fail (e.g. no access)
+# httpx network errors seen in practice ("Temporary failure in name resolution").
+NETWORK_ERRORS = {"ConnectError", "ConnectTimeout", "ReadTimeout", "ReadError",
+                  "RemoteProtocolError", "WriteError", "PoolTimeout"}
 
 EMBEDDING_FIELDS = [
     ("product_id", "STRING", "REQUIRED", "products.product_id"),
@@ -83,7 +86,15 @@ def make_embedder(client, model=MODEL, dims=DIMENSIONS, sleep=time.sleep):
             except errors.APIError as exc:
                 if exc.code not in RETRY_CODES or attempt == MAX_ATTEMPTS - 1:
                     raise
-                sleep(min(60, 2 ** attempt))
+            except (ConnectionError, OSError) as exc:
+                # Network blips (DNS failures, resets). httpx's ConnectError is
+                # not a ConnectionError, so it is matched by name below.
+                if attempt == MAX_ATTEMPTS - 1:
+                    raise
+            except Exception as exc:  # noqa: BLE001
+                if type(exc).__name__ not in NETWORK_ERRORS or attempt == MAX_ATTEMPTS - 1:
+                    raise
+            sleep(min(60, 2 ** attempt))
         raise RuntimeError("unreachable")
 
     return embed
