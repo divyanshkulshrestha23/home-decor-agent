@@ -17,6 +17,8 @@ A multi-agent assistant for an online furniture and home decor store, built with
 | Returned products within the requested price and size limits | **100%** |
 | Same product found from a different photo of it, top 5 (210 queries) | **61.4%** |
 | Top search result in the right product category | **76.2%** |
+| Business questions answered correctly by the SQL analyst (20 questions) | **95%** |
+| Messages routed to the right agent (10 messages) | **100%** |
 
 Details and the model comparison are in [Evaluation](#evaluation).
 
@@ -128,9 +130,16 @@ brought that to 94.4%. Comparing models on the same set:
 The agents use `gemini-3.5-flash`. It costs about 5 times more per request, but it was the
 only model that reliably told a requirement ("only real leather") from a preference.
 
-**Analyst and routing** (`evals/analytics_eval.py`). 20 business questions, each checked
-against a reference SQL answer, and 10 shopper and manager messages checked for where the
-router sends them.
+**Analyst and routing** (`evals/analytics_eval.py`). 20 business questions (revenue for a
+period, return rates, top cities and products, channel share, delivery times, and the two
+"why" investigations), each checked against a reference SQL answer. Plus 10 shopper and
+manager messages checked for where the router sends them.
+
+| Metric | Result |
+|---|---|
+| Questions answered correctly | **95%** (19 of 20) |
+| Average SQL queries per question | **2.0** |
+| Messages routed to the right agent | **100%** (10 of 10) |
 
 ## Tech stack
 
