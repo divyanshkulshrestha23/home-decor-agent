@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+.env
+
+# Dataset files and generated catalog (not committed)
+data/
+*.tar
+*.csv.gz
+*.json.gz
