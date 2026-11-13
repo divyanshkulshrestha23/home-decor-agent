@@ -1,195 +1,105 @@
 # Home Decor Agent
 
-A multi-agent shopping and analytics assistant for a furniture and home decor store,
-built with Google's Agent Development Kit (ADK), Gemini, and BigQuery.
+A multi-agent assistant for an online furniture and home decor store, built with Google's
+**Agent Development Kit (ADK)**, **Gemini** and **BigQuery**.
 
-Planned modes:
+- **Shoppers** send a photo of something they like and a voice note ("like this, but in
+  navy and under 15k") and get matching products from a 13,900-item catalog.
+- **Store managers** ask business questions in plain language ("why did rug returns go up
+  after May?") and get answers computed with SQL over the store's sales data.
+- A **routing agent** reads each message and hands it to the right specialist.
 
-| Mode | Who | Input |
-|---|---|---|
-| Find similar | Shopper | Photo of an item, plus a voice note ("like this, but in oak and narrower") |
-| Furnish my room | Shopper | Photo of a room, plus a voice note (budget, space, what they want) |
-| Store analytics | Manager | A question about sales, answered with SQL over BigQuery |
+## Results
 
-**Status:** the catalog (13,921 products), its image embeddings and the find-similar agent run
-live, with evaluation results below. The store analyst and the routing agent are built and
-tested offline; they still need a live run. Furnish-my-room is not built.
+| What was measured | Result |
+|---|---|
+| Correct search filters from natural-language requests (30 requests x 3 runs, `gemini-3.5-flash`) | **100%** |
+| Returned products within the requested price and size limits | **100%** |
+| Same product found from a different photo of it, top 5 (210 queries) | **61.4%** |
+| Top search result in the right product category | **76.2%** |
 
-## Step 1: Product catalog
+Details and the model comparison are in [Evaluation](#evaluation).
 
-The catalog comes from the [Amazon Berkeley Objects](https://amazon-berkeley-objects.s3.amazonaws.com/index.html)
-dataset (see [DATA_NOTICE.md](DATA_NOTICE.md)). `catalog/prepare.py`:
+## Example
 
-- keeps only furniture and home decor product types (sofas, chairs, tables, rugs, and similar),
-  with an English name and a main image;
-- sorts products from broad types such as `HOME` into store categories by their category
-  trail (falling back to words in the name), and leaves out what the store would not sell,
-  such as tools, grill covers, and phone accessories (`catalog/classify.py`);
-- flattens colour, material, style, bullet points, and keywords to English text;
-- converts dimensions to centimetres and weight to kilograms, and adds the longest and
-  shortest sides of each product's footprint (ABO's own "width" and "length" are not
-  used consistently, so a sofa's "length" can be its long side);
-- generates a price in rupees for each product (ABO has no prices; see `catalog/pricing.py`);
-- writes `data/products.jsonl` and a coverage report to `data/catalog_report.json`.
+**Manager:** *Why did rug returns go up after May 2026?*
 
-`catalog/load_bigquery.py` checks every row against the table schema, then loads it
-into the BigQuery table `home_decor.products`.
+The router hands the question to the analyst, which breaks the returns down with SQL and answers:
 
-### Run it in Cloud Shell
+> The increase is driven by **Stone & Beam** rugs: their return rate rose from **7.8%** to
+> **26.1%** after May 2026, while other rug brands stayed flat (7.6% to 6.3%). 188 of the 215
+> Stone & Beam returns cite **"colour differs from photo"**, and the brand's other categories
+> are unaffected, which points to the product photos or a colour issue with a batch of rugs.
 
-Cloud Shell already has Python, `gcloud`, and Google Cloud credentials.
+**Shopper:** *(photo of a black visitor chair, voice note: "I want something like this but
+in navy blue")*
 
-```bash
-git clone https://github.com/divyanshkulshrestha23/home-decor-agent.git
-cd home-decor-agent
-pip install -r requirements.txt
+The router hands it to the shopping agent, which searches with the photo plus "navy" and
+replies that the store has no navy version of that chair style. It offers the closest style
+match (a black guest chair with a metal frame) and the closest colour match (a navy accent
+chair), and says what each lacks.
 
-# Download the listings (about 83 MB) and the image index
-curl -O https://amazon-berkeley-objects.s3.amazonaws.com/archives/abo-listings.tar
-curl -O https://amazon-berkeley-objects.s3.amazonaws.com/images/metadata/images.csv.gz
+## How it works
 
-# Build the catalog
-python3 -m catalog.prepare --listings abo-listings.tar --images-metadata images.csv.gz
-
-# Check the rows, then load them
-gcloud services enable bigquery.googleapis.com
-python3 -m catalog.load_bigquery --project YOUR_PROJECT_ID --dry-run
-python3 -m catalog.load_bigquery --project YOUR_PROJECT_ID
+```mermaid
+flowchart LR
+    U[Message: text, photo, voice] --> R[Router agent]
+    R -->|shopper| F[Find-similar agent]
+    R -->|manager| A[Store analyst agent]
+    F --> S[find_similar_products tool]
+    S --> E[Gemini Embedding 2:<br/>photo + description]
+    E --> Q[(BigQuery: products +<br/>embeddings)]
+    A --> T[run_sql tool:<br/>dry run, SELECT only,<br/>byte cap]
+    T --> D[(BigQuery: orders,<br/>order items, customers)]
 ```
 
-`--images-metadata` is optional. Without it, `main_image_path` is left empty.
+### Agents
 
-To run on your own machine instead, use `python` in place of `python3` on Windows, and
-run `gcloud auth application-default login` before the load step.
+All three are ADK `LlmAgent`s on `gemini-3.5-flash`, at low temperature for consistent
+answers, with automatic retries when Vertex AI rate-limits.
 
-### Other options
+- **Router** (`agent/router.py`): has the two specialists as `sub_agents` and uses ADK's
+  agent transfer to pass each message to the right one.
+- **Find-similar** (`agent/agent.py`, `agent/tools.py`): listens to the voice note, works
+  out what the shopper wants, and turns only firm limits into filters. "Under 20k" and
+  "fits a 1.8 m wall" become a price and a width limit, while "I'd like it in green" stays a
+  preference in the search description. It then explains the best matches using only facts
+  from the results.
+- **Store analyst** (`agent/analyst.py`, `agent/sql_tools.py`): writes GoogleSQL against the
+  sales tables, breaks numbers down to explain changes, and reports the period and the
+  definitions it used. Every query is checked before it runs: one statement, confirmed as
+  a `SELECT` by a BigQuery dry run, only the store's own dataset, at most 1 GB scanned
+  (also enforced by `maximum_bytes_billed`), and at most 6 queries per question. BigQuery
+  errors go back to the agent so it can fix its SQL.
 
-```bash
-# List every product type in the dataset, and which ones the store keeps
-python3 -m catalog.prepare --listings abo-listings.tar --list-types
+### Multimodal search
 
-# Show the most common category trails for some product types
-python3 -m catalog.prepare --listings abo-listings.tar --browse-paths HOME HOME_BED_AND_BATH
+Each catalog product is embedded once with **Gemini Embedding 2** (768 dimensions) from its
+main image plus a short description (name, category, colour, material, style). A shopper's
+photo plus the agent's description of what they want is embedded the same way, so "like this
+photo, but in navy" becomes a single query vector.
 
-# Print raw listings of one type, to check the field formats
-python3 -m catalog.prepare --listings abo-listings.tar --inspect 2 --type SOFA
-```
+One BigQuery query then ranks only the products that pass the filters (category, price,
+colour, material, width, depth, height) by cosine similarity (`ML.DISTANCE`). Filter values
+are always query parameters, never pasted into the SQL. Near-duplicate colour and size
+variants are dropped from the top results.
 
-## Step 2a: Image embeddings
+### Catalog
 
-Each product gets one vector from **Gemini Embedding 2** (`gemini-embedding-2`, 768 dimensions),
-built from its main image plus a short line of text (name, category, colour, material, style).
-A shopper's photo plus spoken details can then be embedded the same way and matched against it.
-
-```bash
-git pull && pip install -r requirements.txt
-gcloud services enable aiplatform.googleapis.com
-
-# 1. Extract the catalog's images (streams the ~3 GB archive; keeps only ours)
-curl -s https://amazon-berkeley-objects.s3.amazonaws.com/archives/abo-images-small.tar \
-  | python3 -m catalog.fetch_images
-
-# 2. Test on 100 products, then sanity-check the vectors
-python3 -m catalog.embed_images --project YOUR_PROJECT_ID --limit 100
-python3 -m catalog.embed_images --check
-
-# 3. Embed the rest (resumes where it stopped), then load into BigQuery
-python3 -m catalog.embed_images --project YOUR_PROJECT_ID
-python3 -m catalog.embed_images --project YOUR_PROJECT_ID --load
-```
-
-`--check` reports how often each product's closest neighbour is in the same category. It is a
-rough check that the vectors mean something, not a search accuracy score.
-
-## Step 2b: Find-similar agent
-
-An ADK agent (`agent/agent.py`, model `gemini-3.5-flash` by default) reads the shopper's
-photo, voice note and text, turns any firm limits into filters, and calls one tool,
-`find_similar_products` (`agent/tools.py`). The tool:
-
-1. embeds the photo plus the agent's description of what the shopper wants, in the same
-   image-plus-text format as the catalog;
-2. runs one BigQuery query that ranks the products passing the filters (category, price,
-   colour, material, width, depth, height) by cosine similarity with `ML.DISTANCE`. This is
-   an exact search; at 14k products it needs no vector index. (`VECTOR_SEARCH` was tried
-   first, but it does not accept a filtered input that joins two tables.) Filters are query
-   parameters, never pasted into the SQL;
-3. drops near-duplicate colour and size variants and returns the top 5.
-
-Try it from Cloud Shell (upload a photo or a voice note with the Cloud Shell "Upload" menu):
-
-```bash
-export GOOGLE_CLOUD_PROJECT=YOUR_PROJECT_ID
-python3 -m agent.cli --text "a jute rug for a small bedroom, under 5000"
-python3 -m agent.cli --image my_chair.jpg --text "like this but in navy"
-python3 -m agent.cli --image my_chair.jpg --audio note.m4a
-```
-
-## Step 3: Sales data, store analyst and routing
-
-**Sales data** (`sales/`). ABO has no sales, so `sales/generate.py` simulates about 55,000
-orders from January 2025 to October 2026 over the real catalog: growth, weekends, a festive
-season, a New Year sale, a monsoon dip, category-specific returns, and two hidden events for
-the analyst to find (`sales/STORIES.md`). It is seeded, so it is reproducible.
-
-```bash
-python3 -m sales.generate
-python3 -m sales.load --project YOUR_PROJECT_ID --dry-run
-python3 -m sales.load --project YOUR_PROJECT_ID
-```
-
-**Store analyst** (`agent/analyst.py`, `agent/sql_tools.py`). An ADK agent that answers
-managers' questions by writing BigQuery SQL. Every query is checked before it runs: one
-statement only, a dry run must report a `SELECT`, only tables in the store's dataset, and at
-most 1 GB scanned (also enforced with `maximum_bytes_billed`). BigQuery errors go back to the
-agent so it can correct its SQL.
-
-**Routing** (`agent/router.py`). A root ADK agent with the two specialists as `sub_agents`
-transfers each message to `find_similar` (shoppers) or `store_analyst` (managers).
-
-```bash
-python3 -m agent.cli --text "Why did rug returns go up after May 2026?"
-python3 -m agent.cli --image chair.jpg --text "like this but cheaper"
-```
+Built from the Amazon Berkeley Objects dataset (`catalog/`): about 148,000 listings are
+filtered to 13,921 English-named furniture and decor products in 21 categories. Broad product
+types are sorted into categories by their category trail and name, and items the store would
+not sell (tools, phone accessories, fabric swatches) are dropped. Sizes are converted to
+centimetres, with the longest and shortest sides of each product's footprint computed so
+that "width" means what a shopper means.
 
 ## Evaluation
 
-Two automatic evaluations, run against the live system.
+Three automatic evaluations run against the live system (`evals/`).
 
-**A. Search** (`evals/search_eval.py`): for about 10 products per category, another photo of
-the same product (a different angle, or the item in a room) is used as the query, with no
-text and no filters. It reports how often the product itself (`exact@k`) or one of its
-colour/size variants (`variant@k`) is in the top k, and how often the top result is in the
-right category.
-
-```bash
-python3 -m evals.search_eval prepare --images-metadata images.csv.gz
-curl -s https://amazon-berkeley-objects.s3.amazonaws.com/archives/abo-images-small.tar \
-  | python3 -m catalog.fetch_images --paths-file evals/data/query_paths.txt --out data/eval_images
-python3 -m evals.search_eval run --project YOUR_PROJECT_ID
-```
-
-**B. Agent behaviour** (`evals/agent_eval.py`): 30 typed requests in
-`evals/data/agent_cases.json`, each with the filters a correct agent sets (for example
-"fits a 1.8 m wall" gives a 180 cm width limit) and filters it must not set ("I'd like it in
-green" is a preference, not a colour filter). Each request runs 3 times to measure
-consistency, and every returned product is checked against the price and size limits.
-
-```bash
-python3 -m evals.agent_eval --project YOUR_PROJECT_ID
-```
-
-**C. Analyst and routing** (`evals/analytics_eval.py`): 20 business questions, each with a
-reference SQL query; the analyst passes if its own query results contain the reference
-answer. Plus 10 shopper and manager messages, checked for where the root agent sends them.
-
-```bash
-python3 -m evals.analytics_eval --project YOUR_PROJECT_ID
-```
-
-### Results (13 November 2026)
-
-**Search**, 210 queries (10 per category), a different photo of each product as the query:
+**Search** (`evals/search_eval.py`). For 10 products per category, a *different* photo of
+the same product (another angle, or the item in a room) is the query, with no text and no
+filters.
 
 | Metric | Result |
 |---|---|
@@ -197,40 +107,115 @@ python3 -m evals.analytics_eval --project YOUR_PROJECT_ID
 | Product or a colour/size variant in top 5 | 61.4% |
 | Top result in the right category | 76.2% |
 
-Weakest categories: towels, beds, chairs and window hardware, where the extra photos are
-often close-ups of fabric or packaging rather than the whole item. Fabric swatches (303
-sample listings) were removed from the catalog after the first run surfaced them as
-top matches for fabric close-ups.
+**Agent behaviour** (`evals/agent_eval.py`). 30 typed requests covering budgets ("25k",
+"₹15,000", "fifteen hundred rupees", ranges), sizes in metres, feet and cm, preferences versus
+requirements, vague words that must not become filters ("cheap", "small"), and Hinglish. Each
+case lists the filters a correct agent sets and the ones it must not set, and every request
+runs 3 times.
 
-**Agent behaviour**, `gemini-3.5-flash-lite`, 30 requests x 3 runs, before the fixes below:
-filters exactly right in 71.1% of runs; returned products within the agent's price and size
-limits in 100%; one search per request in 88.9%. Main failures: no category set for
-text-only requests, plural category names, and colour preferences ("I'd like green")
-turned into hard filters. Fixes: categories are normalised in code, and the instructions
-and tool descriptions now say when to set categories and when to leave colour empty.
-
-After the fixes, both models on the same 30 requests x 3 runs:
+The first version, on `gemini-3.5-flash-lite`, set exactly the right filters in 71.1% of runs.
+Normalising category names in the tool and tightening the instructions and tool descriptions
+brought that to 94.4%. Comparing models on the same set:
 
 | Metric | gemini-3.5-flash-lite | gemini-3.5-flash |
 |---|---|---|
-| Filters exactly right | 94.4% | 100% |
-| Requests right in all 3 runs | 90.0% | 100% |
-| Same filters in every run | 73.3% | 86.7% |
-| Returned products within the limits | 100% | 100% |
-| One search per request | 97.8% | 100% |
+| Filters exactly right | 94.4% | **100%** |
+| Requests right in all 3 runs | 90.0% | **100%** |
+| Same filters in every run | 73.3% | **86.7%** |
+| Returned products within the limits | 100% | **100%** |
+| One search per request | 97.8% | **100%** |
 
-Flash-Lite's remaining misses: "only real leather sofas" never became a material filter, and
-"rugs" instead of "rug" (now mapped by the tool, so no longer a real failure). The agents use
-`gemini-3.5-flash`: about 5 times the cost per request, still around one to two rupees.
+The agents use `gemini-3.5-flash`. It costs about 5 times more per request, but it was the
+only model that reliably told a requirement ("only real leather") from a preference.
 
-### Known data limits
+**Analyst and routing** (`evals/analytics_eval.py`). 20 business questions, each checked
+against a reference SQL answer, and 10 shopper and manager messages checked for where the
+router sends them.
 
-- Some ABO sizes are wrong, most likely the shipping box rather than the product (an 8-foot
-  round rug listed as 152 x 20 x 20 cm). Size filters can therefore wrongly include or
-  exclude a few products.
-- About 2,200 products share a main image with another product (colour or size variants).
-  Search results drop near-duplicate variants, and evaluation must not count a variant as
-  a fair match.
+## Tech stack
+
+Google ADK · Gemini 3.5 Flash (text, image and audio input) · Gemini Embedding 2 ·
+Vertex AI · BigQuery · Python 3.12 and 3.13 (tested) · pytest (195 tests, no network needed)
+
+## Running it
+
+Everything runs from Google Cloud Shell, which already has Python, `gcloud` and credentials.
+Replace `YOUR_PROJECT_ID` with your project.
+
+```bash
+git clone https://github.com/divyanshkulshrestha23/home-decor-agent.git
+cd home-decor-agent
+pip install -r requirements.txt
+gcloud services enable bigquery.googleapis.com aiplatform.googleapis.com
+export GOOGLE_CLOUD_PROJECT=YOUR_PROJECT_ID
+```
+
+**1. Build the catalog and load it into BigQuery**
+
+```bash
+curl -O https://amazon-berkeley-objects.s3.amazonaws.com/archives/abo-listings.tar
+curl -O https://amazon-berkeley-objects.s3.amazonaws.com/images/metadata/images.csv.gz
+python3 -m catalog.prepare --listings abo-listings.tar --images-metadata images.csv.gz
+python3 -m catalog.load_bigquery --project YOUR_PROJECT_ID
+```
+
+**2. Embed the product images** (one-time; streams the image archive and keeps only the
+catalog's images)
+
+```bash
+curl -s https://amazon-berkeley-objects.s3.amazonaws.com/archives/abo-images-small.tar \
+  | python3 -m catalog.fetch_images
+python3 -m catalog.embed_images --project YOUR_PROJECT_ID
+python3 -m catalog.embed_images --project YOUR_PROJECT_ID --load
+```
+
+**3. Generate and load the sales data**
+
+```bash
+python3 -m sales.generate
+python3 -m sales.load --project YOUR_PROJECT_ID
+```
+
+**4. Talk to the assistant**
+
+```bash
+python3 -m agent.cli --text "Why did rug returns go up after May 2026?"
+python3 -m agent.cli --text "a jute rug for a small bedroom, under 5000"
+python3 -m agent.cli --image chair.jpg --audio note.m4a
+```
+
+Each run prints the reply and every tool call, including the agent transfer, the SQL it
+ran, and the products the search returned.
+
+**5. Run the evaluations**
+
+```bash
+python3 -m evals.agent_eval --project YOUR_PROJECT_ID
+python3 -m evals.analytics_eval --project YOUR_PROJECT_ID
+python3 -m evals.search_eval prepare --images-metadata images.csv.gz
+curl -s https://amazon-berkeley-objects.s3.amazonaws.com/archives/abo-images-small.tar \
+  | python3 -m catalog.fetch_images --paths-file evals/data/query_paths.txt --out data/eval_images
+python3 -m evals.search_eval run --project YOUR_PROJECT_ID
+```
+
+## Project layout
+
+```
+agent/      router, find-similar and analyst agents; search; guarded SQL tools; CLI
+catalog/    dataset filtering, categories, pricing, image extraction, embeddings, loading
+sales/      synthetic sales generator and loader
+evals/      search, agent-behaviour and analytics evaluations, with their test cases
+tests/      unit tests with fake models and fake BigQuery (no network)
+```
+
+## Data
+
+Product data, images and sizes come from the
+[Amazon Berkeley Objects](https://amazon-berkeley-objects.s3.amazonaws.com/index.html)
+dataset (CC BY-NC 4.0); see [DATA_NOTICE.md](DATA_NOTICE.md). The dataset has no prices or
+sales, so prices (`catalog/pricing.py`) and the sales history (`sales/generate.py`, about
+55,000 orders from January 2025 to October 2026) are generated, with fixed seeds so they are
+reproducible.
 
 ## Tests
 
@@ -238,5 +223,3 @@ Flash-Lite's remaining misses: "only real leather sofas" never became a material
 pip install -r requirements-dev.txt
 python3 -m pytest
 ```
-
-The tests use constructed listings in the ABO format. No dataset rows are committed.
