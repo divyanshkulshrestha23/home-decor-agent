@@ -191,11 +191,12 @@ def main(argv=None):
     summary = asyncio.run(run_cases(
         lambda: AgentSession(build_find_similar_agent(search, model=model)), cases, args.repeats))
     summary["model"] = model
-    RESULTS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    RESULTS_FILE.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
+    out = RESULTS_FILE.with_name(f"agent_eval_{model}.json")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"Model: {model}")
     print_summary(summary)
-    print(f"\nSaved to {RESULTS_FILE}")
+    print(f"\nSaved to {out}")
 
 
 if __name__ == "__main__":

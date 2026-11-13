@@ -22,6 +22,18 @@ def _clean_list(values):
     return [v.strip() for v in (values or []) if isinstance(v, str) and v.strip()]
 
 
+def normalize_categories(values):
+    """Map near-misses like "Rugs" or "small storage" onto the store's category names."""
+    result = []
+    for value in _clean_list(values):
+        name = value.lower().replace(" ", "_").replace("-", "_")
+        if name not in CATEGORIES and name.endswith("s") and name[:-1] in CATEGORIES:
+            name = name[:-1]
+        if name not in result:
+            result.append(name)
+    return result
+
+
 def make_find_similar_tool(search):
     """Build the find_similar_products tool around a ProductSearch."""
 
@@ -45,19 +57,26 @@ def make_find_similar_tool(search):
         Args:
           description: Short English description of what the shopper wants, including
             any changes from the photo, e.g. "mid-century armchair in navy velvet".
-          categories: Store categories to restrict to. Allowed values: accent_furniture,
+          categories: Store categories to restrict to. Set this whenever the request or
+            photo names or shows a kind of item (bookshelf -> storage, bedsheets ->
+            bedding, desk -> desk). Allowed values: accent_furniture,
             bath_linen, bed, bedding, bench, chair, curtains, cushions, decor, desk,
             lighting, ottoman, outdoor_decor, outdoor_furniture, rug, small_storage,
             sofa, stool, storage, table, window_hardware.
-          min_price_inr: Lowest price in rupees, only if the shopper gave one.
-          max_price_inr: Highest price in rupees, only if the shopper gave a budget.
-          colors: Colours the product must have, only if the shopper insisted on them.
-          materials: Materials the product must have, only if the shopper insisted.
+          min_price_inr: Lowest price in rupees, only if the shopper gave a number.
+          max_price_inr: Highest price in rupees, only if the shopper gave a number.
+            Words like "cheap" or "affordable" are not a number: leave this empty.
+          colors: LEAVE EMPTY unless the shopper said the colour is required ("must",
+            "only", "has to be"). "I'd like green", "maybe yellow" or a colour simply
+            mentioned are preferences: put them in `description`, not here.
+          materials: Same rule as colors. "Only real leather" or "must be wood" go here;
+            "velvet would be nice" goes in `description`.
           max_width_cm: Maximum width (longest side) in cm, only if the shopper gave space limits.
           max_depth_cm: Maximum depth (shorter side) in cm.
           max_height_cm: Maximum height in cm.
         """
-        unknown = [c for c in _clean_list(categories) if c not in CATEGORIES]
+        categories = normalize_categories(categories)
+        unknown = [c for c in categories if c not in CATEGORIES]
         if unknown:
             return {"error": f"Unknown categories {unknown}. Allowed: {CATEGORIES}"}
 
@@ -68,7 +87,7 @@ def make_find_similar_tool(search):
             return {"error": "Need a photo or a description to search."}
 
         filters = Filters(
-            categories=_clean_list(categories),
+            categories=categories,
             min_price_inr=min_price_inr,
             max_price_inr=max_price_inr,
             colors=_clean_list(colors),

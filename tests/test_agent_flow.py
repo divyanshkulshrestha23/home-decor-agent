@@ -116,6 +116,12 @@ async def test_search_failure_is_reported_not_raised():
     assert result["reply"].startswith("Problem:")
 
 
+@pytest.mark.asyncio
+async def test_plural_and_spaced_categories_are_normalized():
+    _, search = await run({"description": "x", "categories": ["Rugs", "small storage", "rug"]}, build_message(text="x"))
+    assert search.calls[0]["filters"].categories == ["rug", "small_storage"]
+
+
 def test_agent_uses_low_temperature():
     agent = build_find_similar_agent(FakeSearch([]), model=ScriptedLlm())
     assert agent.generate_content_config.temperature == 0.2

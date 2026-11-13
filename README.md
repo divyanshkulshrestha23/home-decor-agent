@@ -152,7 +152,27 @@ consistency, and every returned product is checked against the price and size li
 python3 -m evals.agent_eval --project YOUR_PROJECT_ID
 ```
 
-Results: not run yet.
+### Results (13 November 2026)
+
+**Search**, 210 queries (10 per category), a different photo of each product as the query:
+
+| Metric | Result |
+|---|---|
+| Exact product in top 5 | 55.2% |
+| Product or a colour/size variant in top 5 | 61.4% |
+| Top result in the right category | 76.2% |
+
+Weakest categories: towels, beds, chairs and window hardware, where the extra photos are
+often close-ups of fabric or packaging rather than the whole item. Fabric swatches (303
+sample listings) were removed from the catalog after the first run surfaced them as
+top matches for fabric close-ups.
+
+**Agent behaviour**, `gemini-3.5-flash-lite`, 30 requests x 3 runs, before the fixes below:
+filters exactly right in 71.1% of runs; returned products within the agent's price and size
+limits in 100%; one search per request in 88.9%. Main failures: no category set for
+text-only requests, plural category names, and colour preferences ("I'd like green")
+turned into hard filters. Fixes: categories are normalised in code, and the instructions
+and tool descriptions now say when to set categories and when to leave colour empty.
 
 ### Known data limits
 
