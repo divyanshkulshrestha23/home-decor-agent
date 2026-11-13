@@ -11,9 +11,9 @@ Planned modes:
 | Furnish my room | Shopper | Photo of a room, plus a voice note (budget, space, what they want) |
 | Store analytics | Manager | A question about sales, answered with SQL over BigQuery |
 
-**Status:** the catalog (14,224 products) and its image embeddings are in BigQuery. The
-find-similar agent (step 2b) is built and tested offline; it has not been run against live
-Gemini yet. Furnish-my-room and analytics are not built yet.
+**Status:** the catalog (13,921 products), its image embeddings and the find-similar agent run
+live, with evaluation results below. The store analyst and the routing agent are built and
+tested offline; they still need a live run. Furnish-my-room is not built.
 
 ## Step 1: Product catalog
 
@@ -125,6 +125,33 @@ python3 -m agent.cli --image my_chair.jpg --text "like this but in navy"
 python3 -m agent.cli --image my_chair.jpg --audio note.m4a
 ```
 
+## Step 3: Sales data, store analyst and routing
+
+**Sales data** (`sales/`). ABO has no sales, so `sales/generate.py` simulates about 55,000
+orders from January 2025 to October 2026 over the real catalog: growth, weekends, a festive
+season, a New Year sale, a monsoon dip, category-specific returns, and two hidden events for
+the analyst to find (`sales/STORIES.md`). It is seeded, so it is reproducible.
+
+```bash
+python3 -m sales.generate
+python3 -m sales.load --project YOUR_PROJECT_ID --dry-run
+python3 -m sales.load --project YOUR_PROJECT_ID
+```
+
+**Store analyst** (`agent/analyst.py`, `agent/sql_tools.py`). An ADK agent that answers
+managers' questions by writing BigQuery SQL. Every query is checked before it runs: one
+statement only, a dry run must report a `SELECT`, only tables in the store's dataset, and at
+most 1 GB scanned (also enforced with `maximum_bytes_billed`). BigQuery errors go back to the
+agent so it can correct its SQL.
+
+**Routing** (`agent/router.py`). A root ADK agent with the two specialists as `sub_agents`
+transfers each message to `find_similar` (shoppers) or `store_analyst` (managers).
+
+```bash
+python3 -m agent.cli --text "Why did rug returns go up after May 2026?"
+python3 -m agent.cli --image chair.jpg --text "like this but cheaper"
+```
+
 ## Evaluation
 
 Two automatic evaluations, run against the live system.
@@ -150,6 +177,14 @@ consistency, and every returned product is checked against the price and size li
 
 ```bash
 python3 -m evals.agent_eval --project YOUR_PROJECT_ID
+```
+
+**C. Analyst and routing** (`evals/analytics_eval.py`): 20 business questions, each with a
+reference SQL query; the analyst passes if its own query results contain the reference
+answer. Plus 10 shopper and manager messages, checked for where the root agent sends them.
+
+```bash
+python3 -m evals.analytics_eval --project YOUR_PROJECT_ID
 ```
 
 ### Results (13 November 2026)

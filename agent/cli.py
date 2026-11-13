@@ -1,11 +1,12 @@
 """Try the find-similar agent from the command line.
 
 Usage (Cloud Shell):
+    python3 -m agent.cli --text "What was revenue in October 2026?"      # routed to the analyst
     python3 -m agent.cli --image chair.jpg --text "like this but in navy, under 15k"
     python3 -m agent.cli --image chair.jpg --audio note.m4a
     python3 -m agent.cli --text "a jute rug for a small bedroom"
 
-Prints the agent's reply, then the products the search tool returned.
+Prints the reply, then each tool call: products found, or the SQL result rows.
 """
 
 import argparse
@@ -40,8 +41,16 @@ def print_result(result):
         print(f"\n=== Tool call: {call['name']} ===")
         print(f"args: {call['args']}")
         response = call.get("response") or {}
+        if not isinstance(response, dict):
+            print(f"result: {str(response)[:300]}")
+            continue
         if "error" in response:
             print(f"error: {response['error']}")
+        if "rows" in response:
+            for row in response["rows"][:10]:
+                print(f"  {row}")
+            if response["row_count"] > 10 or response.get("truncated"):
+                print(f"  ... {response['row_count']} rows" + (" (truncated)" if response.get("truncated") else ""))
         for i, product in enumerate(response.get("results", []), start=1):
             print(f"  {i}. [{product['product_id']}] {product['name'][:70]}")
             print(f"     Rs {product['price_inr']:,} | {product['category']} | "
@@ -49,14 +58,30 @@ def print_result(result):
                   f"similarity {product['similarity']}")
 
 
-async def main_async(args):
+def build_agent(kind, project, model):
+    """kind: 'all' (router with both agents), 'find_similar' or 'analyst'."""
+    from google.cloud import bigquery
+
     from agent import config
     from agent.agent import build_find_similar_agent
-    from agent.run import AgentSession, build_message
+    from agent.analyst import build_analyst_agent
+    from agent.router import build_root_agent
     from agent.search import ProductSearch
+    from agent.sql_tools import SqlRunner
 
-    search = ProductSearch.from_environment(args.project, config.DATASET, config.BQ_LOCATION, config.MODEL_LOCATION)
-    session = AgentSession(build_find_similar_agent(search, model=args.model))
+    search = ProductSearch.from_environment(project, config.DATASET, config.BQ_LOCATION, config.MODEL_LOCATION)
+    runner = SqlRunner(bigquery.Client(project=project), project, config.DATASET, config.BQ_LOCATION)
+    if kind == "find_similar":
+        return build_find_similar_agent(search, model=model)
+    if kind == "analyst":
+        return build_analyst_agent(runner, model=model)
+    return build_root_agent(search, runner, model=model)
+
+
+async def main_async(args):
+    from agent.run import AgentSession, build_message
+
+    session = AgentSession(build_agent(args.agent, args.project, args.model))
     session_id = await session.new_session()
     message = build_message(
         text=args.text,
@@ -75,6 +100,8 @@ def main(argv=None):
     parser.add_argument("--text")
     parser.add_argument("--project", default=config.PROJECT or None)
     parser.add_argument("--model", default=config.AGENT_MODEL)
+    parser.add_argument("--agent", choices=["all", "find_similar", "analyst"], default="all",
+                        help="all = the routing agent in front of both (default)")
     args = parser.parse_args(argv)
     if not args.project:
         parser.error("--project is required (or set GOOGLE_CLOUD_PROJECT)")
