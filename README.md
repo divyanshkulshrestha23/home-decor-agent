@@ -11,8 +11,9 @@ Planned modes:
 | Furnish my room | Shopper | Photo of a room, plus a voice note (budget, space, what they want) |
 | Store analytics | Manager | A question about sales, answered with SQL over BigQuery |
 
-**Status:** step 1 (product catalog, 14,224 products in BigQuery) is done. Step 2a (image
-embeddings) is written but has not been run on the full catalog yet. The agents are not built yet.
+**Status:** the catalog (14,224 products) and its image embeddings are in BigQuery. The
+find-similar agent (step 2b) is built and tested offline; it has not been run against live
+Gemini yet. Furnish-my-room and analytics are not built yet.
 
 ## Step 1: Product catalog
 
@@ -99,6 +100,28 @@ python3 -m catalog.embed_images --project YOUR_PROJECT_ID --load
 
 `--check` reports how often each product's closest neighbour is in the same category. It is a
 rough check that the vectors mean something, not a search accuracy score.
+
+## Step 2b: Find-similar agent
+
+An ADK agent (`agent/agent.py`, model `gemini-3.5-flash-lite` by default) reads the shopper's
+photo, voice note and text, turns any firm limits into filters, and calls one tool,
+`find_similar_products` (`agent/tools.py`). The tool:
+
+1. embeds the photo plus the agent's description of what the shopper wants, in the same
+   image-plus-text format as the catalog;
+2. runs one BigQuery query: `VECTOR_SEARCH` over the products that pass the filters
+   (category, price, colour, material, width, depth, height). Filters are query parameters,
+   never pasted into the SQL;
+3. drops near-duplicate colour and size variants and returns the top 5.
+
+Try it from Cloud Shell (upload a photo or a voice note with the Cloud Shell "Upload" menu):
+
+```bash
+export GOOGLE_CLOUD_PROJECT=YOUR_PROJECT_ID
+python3 -m agent.cli --text "a jute rug for a small bedroom, under 5000"
+python3 -m agent.cli --image my_chair.jpg --text "like this but in navy"
+python3 -m agent.cli --image my_chair.jpg --audio note.m4a
+```
 
 ## Tests
 
