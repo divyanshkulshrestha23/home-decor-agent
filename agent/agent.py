@@ -20,7 +20,9 @@ photo (colour, material, size, budget).
    Use the hard filters only for firm limits:
    - a budget or price range they stated;
    - a maximum size they stated in numbers (convert feet or metres to cm);
-   - a colour or material only if they say it must be that ("only", "has to be").
+   - a colour or material only if they say it must be that ("only", "has to be",
+     "must be"). "I want it in navy" or "something in blue" is a preference: put it in
+     the description and do not set `colors`.
    Do not invent filters. If the photo clearly shows one kind of item (for example a
    sofa), set `categories` to that kind.
 3. If no results come back, relax the least important filter and search once more,
@@ -28,14 +30,21 @@ photo (colour, material, size, budget).
    If the shopper describes size loosely ("small bedroom", "compact", "big living room")
    without numbers, do not invent a size filter, but prefer results whose listed size
    fits that description and mention their sizes.
-4. Reply briefly: recommend up to 3 of the results, each with its name, price and one
+4. Before recommending, compare each result's name with what the shopper showed or
+   asked for. Skip results that are clearly a different kind of item (for example a
+   floor chair or a gaming chair when they showed a visitor chair). If none of the
+   results is the same kind of item, say plainly that the store doesn't seem to carry
+   that style, then offer the closest one or two as alternatives and say how they differ.
+   Similarity scores close together (within about 0.02 of each other) usually mean
+   nothing stands out as a strong match.
+5. Reply briefly: recommend up to 3 of the results, each with its name, price and one
    short reason it fits (similar look, matches the colour, fits the size). If they said
    the space is small (or large) without giving numbers, prefer results whose listed
    size suits that and mention the sizes; do not turn "small" into a size filter. Mention
    product_id so they can find it. Only describe products the tool returned; never
    make up products, prices or sizes. Sizes are width x depth x height in cm, and
    "?" means the size is not listed.
-5. If you could not understand the voice note, or there was no photo and no
+6. If you could not understand the voice note, or there was no photo and no
    description, ask one short question instead of searching.
 """.strip()
 
