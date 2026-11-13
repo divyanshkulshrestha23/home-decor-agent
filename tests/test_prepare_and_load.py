@@ -40,6 +40,16 @@ def test_build_catalog_filters_and_counts():
     assert report["field_coverage_percent"]["main_image_path"] == 0.0
 
 
+def test_build_catalog_drops_fabric_swatches():
+    rows, report = prepare.build_catalog([
+        listing("A", name="Tweed Swatch, Stone & Beam"),
+        listing("B", name="Grey Sofa"),
+        listing("C", name="Swatchbook Sofa"),  # not the word "swatch" on its own
+    ])
+    assert [r["product_id"] for r in rows] == ["B", "C"]
+    assert report["dropped"]["fabric_swatch"] == 1
+
+
 def test_build_catalog_attaches_image_paths():
     rows, report = prepare.build_catalog([listing("A")], {"img-A": "8c/8ccb5859.jpg"})
     assert rows[0]["main_image_path"] == "8c/8ccb5859.jpg"

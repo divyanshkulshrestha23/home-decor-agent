@@ -14,6 +14,7 @@ import argparse
 import csv
 import gzip
 import json
+import re
 import statistics
 import sys
 from collections import Counter
@@ -22,6 +23,7 @@ from pathlib import Path
 from catalog.abo import (
     CATEGORY_BY_TYPE,
     browse_path,
+    english_values,
     has_english_name,
     iter_listings,
     product_type,
@@ -50,6 +52,14 @@ def load_image_paths(path):
         return {r["image_id"]: r["path"] for r in reader}
 
 
+SWATCH_WORD = re.compile(r"\bswatch(es)?\b", re.IGNORECASE)
+
+
+def is_swatch(listing):
+    """Fabric swatches are sample squares sold for choosing upholstery, not furniture."""
+    return any(SWATCH_WORD.search(v) for v in english_values(listing.get("item_name")))
+
+
 def build_catalog(listings, image_paths=None):
     """Filter and flatten listings. Returns (rows, report)."""
     image_paths = image_paths or {}
@@ -72,6 +82,9 @@ def build_catalog(listings, image_paths=None):
             continue
         if not listing.get("main_image_id"):
             dropped["no_image"] += 1
+            continue
+        if is_swatch(listing):
+            dropped["fabric_swatch"] += 1
             continue
         item_id = listing.get("item_id")
         if not isinstance(item_id, str) or item_id in seen:

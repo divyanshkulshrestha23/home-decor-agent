@@ -5,7 +5,7 @@ __pycache__/
 .env
 
 # Dataset files and generated catalog (not committed)
-data/
+/data/
 *.tar
 *.csv.gz
 *.json.gz
