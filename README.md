@@ -11,7 +11,8 @@ Planned modes:
 | Furnish my room | Shopper | Photo of a room, plus a voice note (budget, space, what they want) |
 | Store analytics | Manager | A question about sales, answered with SQL over BigQuery |
 
-**Status:** step 1 of 5, the product catalog, is done. The agents are not built yet.
+**Status:** step 1 (product catalog, 14,224 products in BigQuery) is done. Step 2a (image
+embeddings) is written but has not been run on the full catalog yet. The agents are not built yet.
 
 ## Step 1: Product catalog
 
@@ -72,6 +73,32 @@ python3 -m catalog.prepare --listings abo-listings.tar --browse-paths HOME HOME_
 # Print raw listings of one type, to check the field formats
 python3 -m catalog.prepare --listings abo-listings.tar --inspect 2 --type SOFA
 ```
+
+## Step 2a: Image embeddings
+
+Each product gets one vector from **Gemini Embedding 2** (`gemini-embedding-2`, 768 dimensions),
+built from its main image plus a short line of text (name, category, colour, material, style).
+A shopper's photo plus spoken details can then be embedded the same way and matched against it.
+
+```bash
+git pull && pip install -r requirements.txt
+gcloud services enable aiplatform.googleapis.com
+
+# 1. Extract the catalog's images (streams the ~3 GB archive; keeps only ours)
+curl -s https://amazon-berkeley-objects.s3.amazonaws.com/archives/abo-images-small.tar \
+  | python3 -m catalog.fetch_images
+
+# 2. Test on 100 products, then sanity-check the vectors
+python3 -m catalog.embed_images --project YOUR_PROJECT_ID --limit 100
+python3 -m catalog.embed_images --check
+
+# 3. Embed the rest (resumes where it stopped), then load into BigQuery
+python3 -m catalog.embed_images --project YOUR_PROJECT_ID
+python3 -m catalog.embed_images --project YOUR_PROJECT_ID --load
+```
+
+`--check` reports how often each product's closest neighbour is in the same category. It is a
+rough check that the vectors mean something, not a search accuracy score.
 
 ## Tests
 
