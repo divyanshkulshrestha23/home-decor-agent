@@ -65,9 +65,14 @@ def main(argv=None):
     parser.add_argument("--products", default="data/products.jsonl")
     parser.add_argument("--out", default="data/images")
     parser.add_argument("--archive", help="Path to the archive (default: read from stdin)")
+    parser.add_argument("--paths-file", help="Text file of image paths to extract, one per line "
+                        "(used instead of --products, e.g. for evaluation query photos)")
     args = parser.parse_args(argv)
 
-    wanted = wanted_paths(args.products)
+    if args.paths_file:
+        wanted = {line.strip() for line in Path(args.paths_file).read_text().splitlines() if line.strip()}
+    else:
+        wanted = wanted_paths(args.products)
     print(f"Catalog needs {len(wanted)} images.", file=sys.stderr)
     if args.archive:
         with open(args.archive, "rb") as f:

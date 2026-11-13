@@ -9,3 +9,8 @@ data/
 *.tar
 *.csv.gz
 *.json.gz
+
+# Generated evaluation inputs and outputs
+evals/data/search_cases.jsonl
+evals/data/query_paths.txt
+evals/results/

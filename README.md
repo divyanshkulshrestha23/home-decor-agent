@@ -125,6 +125,35 @@ python3 -m agent.cli --image my_chair.jpg --text "like this but in navy"
 python3 -m agent.cli --image my_chair.jpg --audio note.m4a
 ```
 
+## Evaluation
+
+Two automatic evaluations, run against the live system.
+
+**A. Search** (`evals/search_eval.py`): for about 10 products per category, another photo of
+the same product (a different angle, or the item in a room) is used as the query, with no
+text and no filters. It reports how often the product itself (`exact@k`) or one of its
+colour/size variants (`variant@k`) is in the top k, and how often the top result is in the
+right category.
+
+```bash
+python3 -m evals.search_eval prepare --images-metadata images.csv.gz
+curl -s https://amazon-berkeley-objects.s3.amazonaws.com/archives/abo-images-small.tar \
+  | python3 -m catalog.fetch_images --paths-file evals/data/query_paths.txt --out data/eval_images
+python3 -m evals.search_eval run --project YOUR_PROJECT_ID
+```
+
+**B. Agent behaviour** (`evals/agent_eval.py`): 30 typed requests in
+`evals/data/agent_cases.json`, each with the filters a correct agent sets (for example
+"fits a 1.8 m wall" gives a 180 cm width limit) and filters it must not set ("I'd like it in
+green" is a preference, not a colour filter). Each request runs 3 times to measure
+consistency, and every returned product is checked against the price and size limits.
+
+```bash
+python3 -m evals.agent_eval --project YOUR_PROJECT_ID
+```
+
+Results: not run yet.
+
 ### Known data limits
 
 - Some ABO sizes are wrong, most likely the shipping box rather than the product (an 8-foot
