@@ -125,6 +125,15 @@ python3 -m agent.cli --image my_chair.jpg --text "like this but in navy"
 python3 -m agent.cli --image my_chair.jpg --audio note.m4a
 ```
 
+### Known data limits
+
+- Some ABO sizes are wrong, most likely the shipping box rather than the product (an 8-foot
+  round rug listed as 152 x 20 x 20 cm). Size filters can therefore wrongly include or
+  exclude a few products.
+- About 2,200 products share a main image with another product (colour or size variants).
+  Search results drop near-duplicate variants, and evaluation must not count a variant as
+  a fair match.
+
 ## Tests
 
 ```bash

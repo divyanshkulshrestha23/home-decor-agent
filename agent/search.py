@@ -34,11 +34,19 @@ class Filters:
         return {k: v for k, v in self.__dict__.items() if v not in (None, []) and k != "exclude_ids"}
 
 
-def _like_any(column_expr, param):
-    """True if any element of the array column contains any wanted word (case-insensitive)."""
+def _matches_any(column_expr, param):
+    """True if, for at least one wanted phrase, every word of it appears in the product's values.
+
+    The product's values (e.g. colour names plus standard colour families) are
+    joined into one lowercase string. "navy blue" then matches a product listed
+    as colour "Navy" in the "blue" family, which an exact-phrase match misses.
+    STRPOS is used rather than a regex so the shopper's words are never
+    interpreted as a pattern.
+    """
     return (
-        f"EXISTS (SELECT 1 FROM UNNEST({column_expr}) AS have, UNNEST(@{param}) AS want "
-        f"WHERE LOWER(have) LIKE CONCAT('%', LOWER(want), '%'))"
+        f"EXISTS (SELECT 1 FROM UNNEST(@{param}) AS want WHERE NOT EXISTS ("
+        f"SELECT 1 FROM UNNEST(SPLIT(LOWER(TRIM(want)), ' ')) AS word "
+        f"WHERE word != '' AND STRPOS(LOWER(ARRAY_TO_STRING({column_expr}, ' ')), word) = 0))"
     )
 
 
@@ -63,10 +71,10 @@ def build_query(filters, project, dataset, top_k):
     if filters.max_price_inr is not None:
         add("p.price_inr <= @max_price", "max_price", "INT64", int(filters.max_price_inr))
     if filters.colors:
-        add(_like_any("ARRAY_CONCAT(p.colors, p.color_families)", "colors"), "colors",
+        add(_matches_any("ARRAY_CONCAT(p.colors, p.color_families)", "colors"), "colors",
             "ARRAY<STRING>", list(filters.colors))
     if filters.materials:
-        add(_like_any("p.materials", "materials"), "materials", "ARRAY<STRING>", list(filters.materials))
+        add(_matches_any("p.materials", "materials"), "materials", "ARRAY<STRING>", list(filters.materials))
     if filters.max_width_cm is not None:
         add("p.longest_side_cm <= @max_width", "max_width", "FLOAT64", float(filters.max_width_cm))
     if filters.max_depth_cm is not None:

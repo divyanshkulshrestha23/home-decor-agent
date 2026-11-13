@@ -30,6 +30,14 @@ def test_all_filters_become_parameters():
     assert "ARRAY_CONCAT(p.colors, p.color_families)" in sql
 
 
+def test_colour_and_material_match_every_word_not_the_exact_phrase():
+    sql, _ = build_query(Filters(colors=["navy blue"], materials=["solid wood"]), "p", "d", 5)
+    assert "SPLIT(LOWER(TRIM(want)), ' ')" in sql
+    assert "STRPOS(LOWER(ARRAY_TO_STRING(ARRAY_CONCAT(p.colors, p.color_families), ' ')), word) = 0" in sql
+    assert "STRPOS(LOWER(ARRAY_TO_STRING(p.materials, ' ')), word) = 0" in sql
+    assert "LIKE" not in sql
+
+
 def test_filter_values_never_appear_in_sql():
     hostile = "navy'); DROP TABLE products; --"
     sql, params = build_query(Filters(colors=[hostile], categories=[hostile]), "p", "d", 5)
