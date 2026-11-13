@@ -37,6 +37,8 @@ FIELD_NAMES = [name for name, *_ in PRODUCT_FIELDS]
 
 
 def _type_ok(value, field_type):
+    if field_type == "DATE":
+        return isinstance(value, str) and len(value) == 10 and value[4] == "-" and value[7] == "-"
     if field_type == "STRING":
         return isinstance(value, str)
     if field_type == "INTEGER":
@@ -52,13 +54,13 @@ def _type_ok(value, field_type):
     raise ValueError(f"Unhandled field type {field_type}")
 
 
-def row_errors(row):
+def row_errors(row, fields=PRODUCT_FIELDS):
     """Return a list of problems that would make BigQuery reject this row."""
     errors = []
-    extra = set(row) - set(FIELD_NAMES)
+    extra = set(row) - {name for name, *_ in fields}
     if extra:
         errors.append(f"unknown fields: {sorted(extra)}")
-    for name, field_type, mode, _ in PRODUCT_FIELDS:
+    for name, field_type, mode, _ in fields:
         value = row.get(name)
         if mode == "REPEATED":
             if value is None:
