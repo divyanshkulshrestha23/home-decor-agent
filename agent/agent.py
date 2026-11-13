@@ -1,8 +1,9 @@
 """The shopping agent: finds products similar to a photo, guided by voice or text."""
 
 from google.adk.agents import LlmAgent
+from google.genai import types
 
-from agent.config import AGENT_MODEL
+from agent.config import AGENT_MODEL, AGENT_TEMPERATURE
 from agent.tools import make_find_similar_tool
 
 FIND_SIMILAR_INSTRUCTION = """
@@ -36,6 +37,8 @@ photo (colour, material, size, budget).
    floor chair or a gaming chair when they showed a visitor chair). If none of the
    results is the same kind of item, say plainly that the store doesn't seem to carry
    that style, then offer the closest one or two as alternatives and say how they differ.
+   If no result matches both the style and the colour they asked for, offer the best
+   style match and the best colour match, and say what each one lacks.
    Similarity scores close together (within about 0.02 of each other) usually mean
    nothing stands out as a strong match.
 5. Reply briefly: recommend up to 3 of the results, each with its name, price and one
@@ -60,4 +63,6 @@ def build_find_similar_agent(search, model=AGENT_MODEL):
         description="Finds store products similar to a shopper's photo, voice note or description.",
         instruction=FIND_SIMILAR_INSTRUCTION,
         tools=[make_find_similar_tool(search)],
+        # Low temperature so the same photo and request give consistent answers.
+        generate_content_config=types.GenerateContentConfig(temperature=AGENT_TEMPERATURE),
     )
