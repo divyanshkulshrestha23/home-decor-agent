@@ -7,11 +7,10 @@ changes.
 """
 
 from google.adk.agents import LlmAgent
-from google.genai import types
 
 from agent.agent import build_find_similar_agent
 from agent.analyst import build_analyst_agent
-from agent.config import AGENT_MODEL, AGENT_TEMPERATURE
+from agent.config import AGENT_MODEL, model_config
 
 ROUTER_INSTRUCTION = """
 You are the front desk of an online furniture and home decor store. You do not answer
@@ -36,5 +35,5 @@ def build_root_agent(search, sql_runner, model=AGENT_MODEL):
         instruction=ROUTER_INSTRUCTION,
         sub_agents=[build_find_similar_agent(search, model=model),
                     build_analyst_agent(sql_runner, model=model)],
-        generate_content_config=types.GenerateContentConfig(temperature=AGENT_TEMPERATURE),
+        generate_content_config=model_config(),
     )

@@ -21,6 +21,7 @@ from sales.schema import TABLES as SALES_TABLES
 MAX_BYTES = 1_000_000_000  # 1 GB; the whole dataset is far smaller
 MAX_ROWS = 100
 MAX_SQL_CHARS = 6000
+MAX_QUERIES_PER_QUESTION = 6  # cost and latency cap; enforced per user message
 
 TABLE_FIELDS = {"products": PRODUCT_FIELDS, **SALES_TABLES}
 
@@ -137,15 +138,23 @@ def make_sql_tools(runner):
         """
         return describe_tables(runner.project, runner.dataset)
 
-    def run_sql(sql: str) -> dict:
+    def run_sql(sql: str, tool_context=None) -> dict:
         """Run one read-only BigQuery SELECT query on the store's tables.
 
         Use fully qualified table names. Aggregate in SQL (SUM, COUNT, GROUP BY) rather
-        than fetching raw rows; at most 100 rows are returned.
+        than fetching raw rows; at most 100 rows are returned. At most 6 queries per
+        question.
 
         Args:
           sql: A single GoogleSQL SELECT statement.
         """
+        if tool_context is not None:
+            key = f"sql_queries:{tool_context.invocation_id}"
+            used = tool_context.state.get(key, 0)
+            if used >= MAX_QUERIES_PER_QUESTION:
+                return {"error": f"Query limit reached ({MAX_QUERIES_PER_QUESTION} per question). "
+                                 "Answer now with the results you already have."}
+            tool_context.state[key] = used + 1
         return runner.run(sql)
 
     return [describe_store_tables, run_sql]

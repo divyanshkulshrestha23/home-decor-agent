@@ -17,3 +17,19 @@ AGENT_TEMPERATURE = float(os.environ.get("AGENT_TEMPERATURE", "0.2"))
 
 CATEGORIES = sorted(PRICE_RANGE_INR)
 TOP_K = 5
+
+
+def model_config():
+    """Generation settings shared by all agents.
+
+    Low temperature for consistent answers, and retries with backoff when
+    Vertex AI returns 429 (rate limit) or a 5xx error.
+    """
+    from google.genai import types
+
+    return types.GenerateContentConfig(
+        temperature=AGENT_TEMPERATURE,
+        http_options=types.HttpOptions(retry_options=types.HttpRetryOptions(
+            attempts=5, initial_delay=2.0, max_delay=30.0, http_status_codes=[429, 500, 502, 503, 504],
+        )),
+    )

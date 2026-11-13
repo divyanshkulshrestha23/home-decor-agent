@@ -168,3 +168,21 @@ async def test_router_sends_shoppers_to_find_similar():
     result = await session.send(await session.new_session(), build_message(text="a jute rug"))
     assert [c["name"] for c in result["tool_calls"]] == ["transfer_to_agent", "find_similar_products"]
     assert search.calls == ["a jute rug"]
+
+
+class FakeToolContext:
+    def __init__(self, invocation_id="inv-1"):
+        self.invocation_id = invocation_id
+        self.state = {}
+
+
+def test_run_sql_tool_caps_queries_per_question():
+    from agent.sql_tools import MAX_QUERIES_PER_QUESTION, make_sql_tools
+
+    _, run_sql = make_sql_tools(runner(rows=[{"n": 1}]))
+    context = FakeToolContext()
+    results = [run_sql("SELECT 1", tool_context=context) for _ in range(MAX_QUERIES_PER_QUESTION + 1)]
+    assert all("rows" in r for r in results[:-1])
+    assert results[-1]["error"].startswith("Query limit reached")
+    context.invocation_id = "inv-2"  # a new question gets a fresh allowance
+    assert "rows" in run_sql("SELECT 1", tool_context=context)

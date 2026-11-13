@@ -177,6 +177,7 @@ def main(argv=None):
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--only", help="Comma-separated case ids")
     parser.add_argument("--model")
+    parser.add_argument("--concurrency", type=int, default=2)
     args = parser.parse_args(argv)
 
     from agent import config
@@ -194,7 +195,8 @@ def main(argv=None):
     model = args.model or config.AGENT_MODEL
 
     summary = asyncio.run(run_cases(
-        lambda: AgentSession(build_find_similar_agent(search, model=model)), cases, args.repeats))
+        lambda: AgentSession(build_find_similar_agent(search, model=model)), cases, args.repeats,
+        concurrency=args.concurrency))
     summary["model"] = model
     out = RESULTS_FILE.with_name(f"agent_eval_{model}.json")
     out.parent.mkdir(parents=True, exist_ok=True)

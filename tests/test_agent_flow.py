@@ -125,6 +125,8 @@ async def test_plural_and_spaced_categories_are_normalized():
 def test_agent_uses_low_temperature():
     agent = build_find_similar_agent(FakeSearch([]), model=ScriptedLlm())
     assert agent.generate_content_config.temperature == 0.2
+    retry = agent.generate_content_config.http_options.retry_options
+    assert retry.attempts == 5 and 429 in retry.http_status_codes
 
 
 def test_build_message_needs_something():

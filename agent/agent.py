@@ -1,9 +1,8 @@
 """The shopping agent: finds products similar to a photo, guided by voice or text."""
 
 from google.adk.agents import LlmAgent
-from google.genai import types
 
-from agent.config import AGENT_MODEL, AGENT_TEMPERATURE
+from agent.config import AGENT_MODEL, model_config
 from agent.tools import make_find_similar_tool
 
 FIND_SIMILAR_INSTRUCTION = """
@@ -65,5 +64,5 @@ def build_find_similar_agent(search, model=AGENT_MODEL):
         instruction=FIND_SIMILAR_INSTRUCTION,
         tools=[make_find_similar_tool(search)],
         # Low temperature so the same photo and request give consistent answers.
-        generate_content_config=types.GenerateContentConfig(temperature=AGENT_TEMPERATURE),
+        generate_content_config=model_config(),
     )

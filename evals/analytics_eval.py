@@ -167,6 +167,8 @@ def main(argv=None):
     parser.add_argument("--model")
     parser.add_argument("--only", help="Comma-separated analyst case ids")
     parser.add_argument("--skip-routing", action="store_true")
+    parser.add_argument("--concurrency", type=int, default=1,
+                        help="Questions run at once; keep low to stay under Vertex AI rate limits")
     args = parser.parse_args(argv)
 
     from google.cloud import bigquery
@@ -187,11 +189,13 @@ def main(argv=None):
         cases = [c for c in cases if c["id"] in set(args.only.split(","))]
     answers = reference_answers(runner, cases, f"{args.project}.{config.DATASET}")
 
-    analyst = asyncio.run(run_analyst(lambda: AgentSession(build_analyst_agent(runner, model=model)), cases, answers))
+    analyst = asyncio.run(run_analyst(lambda: AgentSession(build_analyst_agent(runner, model=model)), cases, answers,
+                                      concurrency=args.concurrency))
     routing = None
     if not args.skip_routing:
         search = ProductSearch.from_environment(args.project, config.DATASET, config.BQ_LOCATION, config.MODEL_LOCATION)
-        routing = asyncio.run(run_routing(lambda: AgentSession(build_root_agent(search, runner, model=model))))
+        routing = asyncio.run(run_routing(lambda: AgentSession(build_root_agent(search, runner, model=model)),
+                                          concurrency=args.concurrency))
 
     summary = summarize(analyst, routing)
     summary["model"] = model
