@@ -20,6 +20,9 @@ dataset (see [DATA_NOTICE.md](DATA_NOTICE.md)). `catalog/prepare.py`:
 
 - keeps only furniture and home decor product types (sofas, chairs, tables, rugs, and similar),
   with an English name and a main image;
+- sorts products from broad types such as `HOME` into store categories by their category
+  trail (falling back to words in the name), and leaves out what the store would not sell,
+  such as tools, grill covers, and phone accessories (`catalog/classify.py`);
 - flattens colour, material, style, bullet points, and keywords to English text;
 - converts dimensions to centimetres and weight to kilograms, and adds the longest and
   shortest sides of each product's footprint (ABO's own "width" and "length" are not

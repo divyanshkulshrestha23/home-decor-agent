@@ -26,12 +26,16 @@ PRICE_RANGE_INR = {
     "ottoman": (2000, 15000),
     "stool": (1200, 8000),
     "rug": (1500, 25000),
+    "accent_furniture": (2000, 25000),
+    "outdoor_furniture": (5000, 60000),
+    "outdoor_decor": (800, 15000),
     "lighting": (800, 12000),
-    "bed_and_bath": (600, 8000),
-    "soft_furnishing": (400, 5000),
+    "bedding": (600, 8000),
+    "bath_linen": (300, 3000),
+    "curtains": (500, 6000),
+    "window_hardware": (300, 3000),
+    "cushions": (300, 3000),
     "decor": (400, 8000),
-    "furniture_and_decor": (800, 20000),
-    "home": (400, 10000),
 }
 DEFAULT_RANGE_INR = (500, 10000)
 

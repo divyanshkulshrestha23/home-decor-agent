@@ -12,18 +12,15 @@ import tarfile
 
 # Product types kept for the store, mapped to the category shown to users.
 # Type names come from the dataset's full product_type list
-# (python -m catalog.prepare --list-types).
+# (python -m catalog.prepare --list-types). Broad types such as HOME are
+# not listed here: catalog/classify.py assigns their categories.
 CATEGORY_BY_TYPE = {
     "SOFA": "sofa",
     "CHAIR": "chair",
     "BEAN_BAG_CHAIR": "chair",
     "TABLE": "table",
     "RUG": "rug",
-    "HOME_FURNITURE_AND_DECOR": "furniture_and_decor",
-    "FURNITURE": "furniture_and_decor",
-    "HOME_BED_AND_BATH": "bed_and_bath",
-    "FLAT_SHEET": "bed_and_bath",
-    "HOME": "home",
+    "FLAT_SHEET": "bedding",
     "BED": "bed",
     "BED_FRAME": "bed",
     "HEADBOARD": "bed",
@@ -41,9 +38,9 @@ CATEGORY_BY_TYPE = {
     "LIGHT_FIXTURE": "lighting",
     "HOME_LIGHTING_AND_LAMPS": "lighting",
     "STRING_LIGHT": "lighting",
-    "PILLOW": "soft_furnishing",
-    "CURTAIN": "soft_furnishing",
-    "WINDOW_SHADE": "soft_furnishing",
+    "PILLOW": "cushions",
+    "CURTAIN": "curtains",
+    "WINDOW_SHADE": "curtains",
     "HOME_MIRROR": "decor",
     "VASE": "decor",
     "PLANTER": "decor",

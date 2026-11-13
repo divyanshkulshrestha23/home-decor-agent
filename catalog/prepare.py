@@ -27,6 +27,7 @@ from catalog.abo import (
     product_type,
     to_row,
 )
+from catalog.classify import BROAD_TYPES, classify
 from catalog.pricing import price_inr
 from catalog.schema import row_errors
 
@@ -54,6 +55,8 @@ def build_catalog(listings, image_paths=None):
     image_paths = image_paths or {}
     dropped = Counter()
     unknown_units = Counter()
+    classified_by = Counter()
+    unclassified = Counter()
     seen = set()
     rows = []
     scanned = 0
@@ -61,7 +64,7 @@ def build_catalog(listings, image_paths=None):
     for listing in listings:
         scanned += 1
         ptype = product_type(listing)
-        if ptype not in CATEGORY_BY_TYPE:
+        if ptype not in CATEGORY_BY_TYPE and ptype not in BROAD_TYPES:
             dropped["type_not_in_store"] += 1
             continue
         if not has_english_name(listing):
@@ -76,6 +79,15 @@ def build_catalog(listings, image_paths=None):
             continue
 
         row, unknown = to_row(listing)
+        if ptype in BROAD_TYPES:
+            category, reason = classify(row["browse_path"], row["name"])
+            classified_by[reason] += 1
+            if category is None:
+                dropped[f"broad_type_{reason}"] += 1
+                if reason == "unclassified":
+                    unclassified[f"{row['browse_path'] or '(none)'} | {row['name'][:60]}"] += 1
+                continue
+            row["category"] = category
         unknown_units.update(unknown)
         row["main_image_path"] = image_paths.get(row["main_image_id"])
         row["price_inr"] = price_inr(row["product_id"], row["category"], row["materials"])
@@ -87,7 +99,10 @@ def build_catalog(listings, image_paths=None):
         seen.add(item_id)
         rows.append(row)
 
-    return rows, summarize(rows, scanned, dropped, unknown_units)
+    report = summarize(rows, scanned, dropped, unknown_units)
+    report["broad_types_classified_by"] = dict(classified_by)
+    report["unclassified_examples"] = [text for text, _ in unclassified.most_common(30)]
+    return rows, report
 
 
 def _present(value):
@@ -123,7 +138,9 @@ def summarize(rows, scanned, dropped, unknown_units):
         "listings_scanned": scanned,
         "products_kept": total,
         "dropped": dict(dropped),
-        "store_types_with_no_products": sorted(t for t in CATEGORY_BY_TYPE if t not in by_type),
+        "store_types_with_no_products": sorted(
+            t for t in set(CATEGORY_BY_TYPE) | BROAD_TYPES if t not in by_type
+        ),
         "products_by_category": dict(by_category.most_common()),
         "products_by_type": dict(by_type.most_common()),
         "field_coverage_percent": coverage,
@@ -154,6 +171,12 @@ def print_report(report):
     print(f"  {'colour+material+size':18s} {report['colour_material_width_percent']:5.1f}%")
     if report["unknown_units"]:
         print(f"\nUnits not converted: {report['unknown_units']}")
+    if report.get("broad_types_classified_by"):
+        print(f"\nBroad types (HOME etc.) classified by: {report['broad_types_classified_by']}")
+    if report.get("unclassified_examples"):
+        print("Most common unclassified (path | name), left out of the store:")
+        for text in report["unclassified_examples"][:15]:
+            print(f"  {text}")
 
 
 def list_types(tar_path):
