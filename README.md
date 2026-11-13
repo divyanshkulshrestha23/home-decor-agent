@@ -109,9 +109,11 @@ photo, voice note and text, turns any firm limits into filters, and calls one to
 
 1. embeds the photo plus the agent's description of what the shopper wants, in the same
    image-plus-text format as the catalog;
-2. runs one BigQuery query: `VECTOR_SEARCH` over the products that pass the filters
-   (category, price, colour, material, width, depth, height). Filters are query parameters,
-   never pasted into the SQL;
+2. runs one BigQuery query that ranks the products passing the filters (category, price,
+   colour, material, width, depth, height) by cosine similarity with `ML.DISTANCE`. This is
+   an exact search; at 14k products it needs no vector index. (`VECTOR_SEARCH` was tried
+   first, but it does not accept a filtered input that joins two tables.) Filters are query
+   parameters, never pasted into the SQL;
 3. drops near-duplicate colour and size variants and returns the top 5.
 
 Try it from Cloud Shell (upload a photo or a voice note with the Cloud Shell "Upload" menu):

@@ -1,6 +1,9 @@
 """Tools the agent can call."""
 
+import logging
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from agent.config import CATEGORIES, TOP_K
 from agent.search import Filters
@@ -74,10 +77,14 @@ def make_find_similar_tool(search):
             max_depth_cm=max_depth_cm,
             max_height_cm=max_height_cm,
         )
-        results = search.search(
-            filters, image_bytes=image_bytes, image_mime=image_mime,
-            text=(description or "").strip() or None, top_k=TOP_K,
-        )
+        try:
+            results = search.search(
+                filters, image_bytes=image_bytes, image_mime=image_mime,
+                text=(description or "").strip() or None, top_k=TOP_K,
+            )
+        except Exception as exc:  # noqa: BLE001 - report to the agent instead of crashing the run
+            logger.exception("find_similar_products failed")
+            return {"error": f"The product search failed ({type(exc).__name__}). Please try again."}
         response = {
             "used_photo": bool(image_bytes),
             "filters_applied": filters.describe(),

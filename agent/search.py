@@ -1,8 +1,8 @@
 """Find products similar to a photo and/or description.
 
 The query (photo, text, or both) is embedded with the same model and the
-same image-plus-text format as the catalog, then BigQuery's VECTOR_SEARCH
-finds the closest products among those that pass the filters. Filters are
+same image-plus-text format as the catalog, then one BigQuery query ranks
+the products that pass the filters by cosine similarity (ML.DISTANCE). Filters are
 applied before the search, so "under Rs 20,000" never returns a Rs 40,000
 sofa that happened to look similar.
 
@@ -78,24 +78,18 @@ def build_query(filters, project, dataset, top_k):
 
     where_sql = ("WHERE " + " AND ".join(where)) if where else ""
     table = f"`{project}.{dataset}"
+    # Exact cosine search over the filtered products. VECTOR_SEARCH was tried
+    # first, but it rejects a filtering subquery that joins two tables; without
+    # a vector index it would do this same exact computation anyway.
     sql = f"""
-WITH hits AS (
-  SELECT base.product_id AS product_id, distance
-  FROM VECTOR_SEARCH(
-    (SELECT e.product_id, e.embedding
-     FROM {table}.product_embeddings` AS e
-     JOIN {table}.products` AS p USING (product_id)
-     {where_sql}),
-    'embedding',
-    (SELECT @query_embedding AS embedding),
-    top_k => {top_k},
-    distance_type => 'COSINE')
-)
 SELECT p.product_id, p.name, p.brand, p.category, p.price_inr, p.colors, p.materials,
        p.styles, p.longest_side_cm, p.shortest_side_cm, p.height_cm, p.main_image_path,
-       1 - hits.distance AS similarity
-FROM hits JOIN {table}.products` AS p USING (product_id)
-ORDER BY hits.distance
+       1 - ML.DISTANCE(e.embedding, @query_embedding, 'COSINE') AS similarity
+FROM {table}.products` AS p
+JOIN {table}.product_embeddings` AS e USING (product_id)
+{where_sql}
+ORDER BY similarity DESC
+LIMIT {top_k}
 """.strip()
     return sql, params
 

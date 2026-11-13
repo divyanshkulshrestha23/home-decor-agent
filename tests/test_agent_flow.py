@@ -102,6 +102,20 @@ async def test_no_results_adds_a_note():
     assert result["reply"] == "Nothing matched."
 
 
+class FailingSearch:
+    def search(self, *args, **kwargs):
+        raise RuntimeError("400 Unsupported query pattern")
+
+
+@pytest.mark.asyncio
+async def test_search_failure_is_reported_not_raised():
+    session = AgentSession(build_find_similar_agent(FailingSearch(), model=ScriptedLlm(tool_args={"description": "x"})))
+    session_id = await session.new_session()
+    result = await session.send(session_id, build_message(text="a sofa"))
+    assert result["tool_calls"][0]["response"]["error"].startswith("The product search failed (RuntimeError)")
+    assert result["reply"].startswith("Problem:")
+
+
 def test_build_message_needs_something():
     with pytest.raises(ValueError):
         build_message()

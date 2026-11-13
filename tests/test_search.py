@@ -7,8 +7,9 @@ def test_query_without_filters_has_no_where():
     sql, params = build_query(Filters(), "proj", "ds", 20)
     assert "WHERE" not in sql
     assert params == []
-    assert "VECTOR_SEARCH(" in sql and "'embedding'" in sql
-    assert "top_k => 20" in sql and "distance_type => 'COSINE'" in sql
+    assert "ML.DISTANCE(e.embedding, @query_embedding, 'COSINE')" in sql
+    assert "ORDER BY similarity DESC" in sql and sql.endswith("LIMIT 20")
+    assert "VECTOR_SEARCH" not in sql  # rejected by BigQuery for joined, filtered input
     assert "`proj.ds.product_embeddings`" in sql and "`proj.ds.products`" in sql
 
 
@@ -120,7 +121,7 @@ def test_search_embeds_query_runs_sql_and_dedupes():
     assert len(embedded[0].parts) == 2 and embedded[0].parts[0].inline_data.mime_type == "image/png"
 
     sql, job_config, location = bq.calls[0]
-    assert "top_k => 20" in sql and location == "asia-south1"
+    assert sql.endswith("LIMIT 20") and location == "asia-south1"
     params = {p.name: p for p in job_config.query_parameters}
     assert params["max_price"].value == 20000
     assert params["query_embedding"].values == [0.6, 0.8]
