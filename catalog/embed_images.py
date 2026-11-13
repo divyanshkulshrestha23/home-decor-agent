@@ -206,8 +206,8 @@ def load_to_bigquery(embeddings_file, project, dataset="home_decor", table="prod
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--project")
-    parser.add_argument("--location", default="us-central1",
-                        help="Vertex AI region for the embedding model (default us-central1)")
+    parser.add_argument("--location", default="global",
+                        help="Vertex AI location. gemini-embedding-2 is offered in global, us and eu only")
     parser.add_argument("--products", default="data/products.jsonl")
     parser.add_argument("--images", default="data/images")
     parser.add_argument("--out", default="data/embeddings.jsonl")
