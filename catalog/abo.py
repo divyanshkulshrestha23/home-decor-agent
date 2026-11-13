@@ -11,36 +11,51 @@ import json
 import tarfile
 
 # Product types kept for the store, mapped to the category shown to users.
-# The first seven were seen in the dataset's top 25 types. The rest are
-# likely type names further down the list; any that match nothing are
-# reported by prepare.py so the list can be corrected.
+# Type names come from the dataset's full product_type list
+# (python -m catalog.prepare --list-types).
 CATEGORY_BY_TYPE = {
     "SOFA": "sofa",
     "CHAIR": "chair",
+    "BEAN_BAG_CHAIR": "chair",
     "TABLE": "table",
     "RUG": "rug",
     "HOME_FURNITURE_AND_DECOR": "furniture_and_decor",
+    "FURNITURE": "furniture_and_decor",
     "HOME_BED_AND_BATH": "bed_and_bath",
+    "FLAT_SHEET": "bed_and_bath",
     "HOME": "home",
     "BED": "bed",
+    "BED_FRAME": "bed",
+    "HEADBOARD": "bed",
     "OTTOMAN": "ottoman",
     "BENCH": "bench",
-    "STOOL": "stool",
+    "STOOL_SEATING": "stool",
     "DESK": "desk",
     "CABINET": "storage",
     "SHELF": "storage",
-    "BOOKCASE": "storage",
     "DRESSER": "storage",
+    "AV_FURNITURE": "storage",
+    "STORAGE_BOX": "small_storage",
+    "BASKET": "small_storage",
     "LAMP": "lighting",
     "LIGHT_FIXTURE": "lighting",
+    "HOME_LIGHTING_AND_LAMPS": "lighting",
+    "STRING_LIGHT": "lighting",
     "PILLOW": "soft_furnishing",
-    "THROW_PILLOW": "soft_furnishing",
     "CURTAIN": "soft_furnishing",
-    "MIRROR": "decor",
+    "WINDOW_SHADE": "soft_furnishing",
+    "HOME_MIRROR": "decor",
     "VASE": "decor",
     "PLANTER": "decor",
     "WALL_ART": "decor",
     "CLOCK": "decor",
+    "CANDLE": "decor",
+    "CANDLE_HOLDER": "decor",
+    "PICTURE_FRAME": "decor",
+    "SCULPTURE": "decor",
+    "FIGURINE": "decor",
+    "ARTIFICIAL_PLANT": "decor",
+    "ROOM_DIVIDER": "decor",
 }
 
 LENGTH_TO_CM = {
@@ -142,15 +157,9 @@ def standard_colors(entries):
     return colors
 
 
-def _measure(entry):
-    """Return (value, unit) from a measurement entry, preferring normalized_value."""
-    if isinstance(entry, list):
-        entry = entry[0] if entry else None
+def _value_unit(entry):
     if not isinstance(entry, dict):
         return None, None
-    normalized = entry.get("normalized_value")
-    if isinstance(normalized, dict) and normalized.get("value") is not None:
-        entry = normalized
     value = entry.get("value")
     unit = entry.get("unit")
     if not isinstance(value, (int, float)) or isinstance(value, bool):
@@ -161,18 +170,31 @@ def _measure(entry):
 def convert(entry, table):
     """Convert a measurement entry with the given unit table.
 
+    Uses the value as listed when its unit is known, and falls back to
+    ABO's normalized_value (usually inches or pounds) otherwise. The listed
+    value is preferred because it is often already metric, which avoids a
+    round trip through inches.
+
     Returns (converted_value, unknown_unit). unknown_unit is the unit string
-    when the value exists but the unit is not in the table, so the caller
-    can count it instead of silently dropping it.
+    when a value exists but no unit is convertible, so the caller can count
+    it instead of silently dropping it.
     """
-    value, unit = _measure(entry)
-    if value is None:
+    if isinstance(entry, list):
+        entry = entry[0] if entry else None
+    if not isinstance(entry, dict):
         return None, None
-    if unit not in table:
-        return None, unit
-    if value <= 0:
-        return None, None
-    return round(value * table[unit], 2), None
+    candidates = [_value_unit(entry), _value_unit(entry.get("normalized_value"))]
+    unknown = None
+    for value, unit in candidates:
+        if value is None:
+            continue
+        if unit not in table:
+            unknown = unknown or unit
+            continue
+        if value <= 0:
+            return None, None
+        return round(value * table[unit], 2), None
+    return None, unknown
 
 
 def dimensions_cm(listing):
@@ -190,6 +212,19 @@ def dimensions_cm(listing):
         if bad_unit:
             unknown.append(bad_unit)
     return result, unknown
+
+
+def horizontal_span(dims):
+    """Return (longest_side_cm, shortest_side_cm) of the floor footprint.
+
+    ABO's "width" and "length" are not used consistently: for a sofa,
+    "length" can be the long side and "width" the depth. Filters such as
+    "narrower" should use these derived values instead.
+    """
+    sides = [v for v in (dims["width_cm"], dims["length_cm"]) if v is not None]
+    if not sides:
+        return None, None
+    return max(sides), min(sides)
 
 
 def weight_kg(listing):
@@ -226,6 +261,7 @@ def to_row(listing):
     if bad_weight_unit:
         unknown.append(bad_weight_unit)
 
+    longest, shortest = horizontal_span(dims)
     other_images = listing.get("other_image_id") or []
     row = {
         "product_id": listing["item_id"],
@@ -238,6 +274,8 @@ def to_row(listing):
         "materials": english_values(listing.get("material")),
         "styles": english_values(listing.get("style")),
         **dims,
+        "longest_side_cm": longest,
+        "shortest_side_cm": shortest,
         "weight_kg": weight,
         "bullet_points": english_values(listing.get("bullet_point"))[:MAX_BULLET_POINTS],
         "keywords": english_values(listing.get("item_keywords"))[:MAX_KEYWORDS],

@@ -21,6 +21,7 @@ PRICE_RANGE_INR = {
     "desk": (5000, 35000),
     "chair": (2500, 25000),
     "storage": (4000, 45000),
+    "small_storage": (300, 4000),
     "bench": (3000, 20000),
     "ottoman": (2000, 15000),
     "stool": (1200, 8000),

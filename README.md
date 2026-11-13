@@ -21,7 +21,9 @@ dataset (see [DATA_NOTICE.md](DATA_NOTICE.md)). `catalog/prepare.py`:
 - keeps only furniture and home decor product types (sofas, chairs, tables, rugs, and similar),
   with an English name and a main image;
 - flattens colour, material, style, bullet points, and keywords to English text;
-- converts dimensions to centimetres and weight to kilograms;
+- converts dimensions to centimetres and weight to kilograms, and adds the longest and
+  shortest sides of each product's footprint (ABO's own "width" and "length" are not
+  used consistently, so a sofa's "length" can be its long side);
 - generates a price in rupees for each product (ABO has no prices; see `catalog/pricing.py`);
 - writes `data/products.jsonl` and a coverage report to `data/catalog_report.json`.
 
@@ -60,6 +62,9 @@ run `gcloud auth application-default login` before the load step.
 ```bash
 # List every product type in the dataset, and which ones the store keeps
 python3 -m catalog.prepare --listings abo-listings.tar --list-types
+
+# Show the most common category trails for some product types
+python3 -m catalog.prepare --listings abo-listings.tar --browse-paths HOME HOME_BED_AND_BATH
 
 # Print raw listings of one type, to check the field formats
 python3 -m catalog.prepare --listings abo-listings.tar --inspect 2 --type SOFA

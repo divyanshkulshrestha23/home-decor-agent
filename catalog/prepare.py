@@ -21,6 +21,7 @@ from pathlib import Path
 
 from catalog.abo import (
     CATEGORY_BY_TYPE,
+    browse_path,
     has_english_name,
     iter_listings,
     product_type,
@@ -31,7 +32,7 @@ from catalog.schema import row_errors
 
 COVERAGE_FIELDS = [
     "brand", "colors", "color_families", "materials", "styles",
-    "height_cm", "width_cm", "length_cm", "weight_kg",
+    "height_cm", "width_cm", "length_cm", "longest_side_cm", "weight_kg",
     "bullet_points", "keywords", "browse_path", "main_image_path",
 ]
 
@@ -105,7 +106,8 @@ def summarize(rows, scanned, dropped, unknown_units):
         all(r[f] is not None for f in ("height_cm", "width_cm", "length_cm")) for r in rows
     )
     search_ready = sum(
-        bool(r["colors"]) and bool(r["materials"]) and r["width_cm"] is not None for r in rows
+        bool(r["colors"]) and bool(r["materials"]) and r["longest_side_cm"] is not None
+        for r in rows
     )
 
     prices = {}
@@ -149,7 +151,7 @@ def print_report(report):
     for field, value in report["field_coverage_percent"].items():
         print(f"  {field:18s} {value:5.1f}%")
     print(f"  {'all 3 dimensions':18s} {report['all_three_dimensions_percent']:5.1f}%")
-    print(f"  {'colour+material+width':18s} {report['colour_material_width_percent']:5.1f}%")
+    print(f"  {'colour+material+size':18s} {report['colour_material_width_percent']:5.1f}%")
     if report["unknown_units"]:
         print(f"\nUnits not converted: {report['unknown_units']}")
 
@@ -166,6 +168,21 @@ def list_types(tar_path):
     for ptype, count in total.most_common():
         mark = "yes" if ptype in CATEGORY_BY_TYPE else ""
         print(f"{ptype:40s} {count:7d} {english[ptype]:8d}  {mark}")
+
+
+def browse_paths(tar_path, types, top):
+    """Print the most common browse paths for each given product type."""
+    wanted = set(types)
+    paths = {t: Counter() for t in types}
+    for listing in iter_listings(tar_path):
+        ptype = product_type(listing)
+        if ptype in wanted and has_english_name(listing):
+            paths[ptype][browse_path(listing) or "(none)"] += 1
+    for ptype in types:
+        total = sum(paths[ptype].values())
+        print(f"\n{ptype} ({total} English listings)")
+        for path, count in paths[ptype].most_common(top):
+            print(f"  {count:6d}  {path}")
 
 
 def inspect(tar_path, ptype, count):
@@ -189,10 +206,18 @@ def main(argv=None):
     parser.add_argument("--list-types", action="store_true", help="Print all product types and exit")
     parser.add_argument("--inspect", type=int, metavar="N", help="Print N raw listings of --type and exit")
     parser.add_argument("--type", help="Product type for --inspect")
+    parser.add_argument(
+        "--browse-paths", nargs="+", metavar="TYPE",
+        help="Print the most common browse paths for these product types and exit",
+    )
+    parser.add_argument("--top", type=int, default=25, help="Paths per type for --browse-paths")
     args = parser.parse_args(argv)
 
     if args.list_types:
         list_types(args.listings)
+        return
+    if args.browse_paths:
+        browse_paths(args.listings, args.browse_paths, args.top)
         return
     if args.inspect:
         if not args.type:

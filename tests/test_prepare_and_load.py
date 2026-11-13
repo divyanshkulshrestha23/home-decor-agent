@@ -123,6 +123,29 @@ def test_list_types_and_inspect(tmp_path, capsys):
     assert '"item_id": "B"' in capsys.readouterr().out
 
 
+def test_browse_paths_lists_paths_per_type(tmp_path, capsys):
+    node = lambda path: [{"node_id": 1, "node_name": path}]  # noqa: E731
+    tar = write_listings_tar(tmp_path / "abo-listings.tar", [
+        listing("A", ptype="HOME", node=node("/Home/Decor")),
+        listing("B", ptype="HOME", node=node("/Home/Decor")),
+        listing("C", ptype="HOME", node=node("/Kitchen/Pans")),
+        listing("D", ptype="HOME", node=None),
+        listing("E", ptype="HOME", item_name=text("x", "de_DE")),
+    ])
+    prepare.main(["--listings", str(tar), "--browse-paths", "HOME"])
+    out = capsys.readouterr().out
+    assert "HOME (4 English listings)" in out
+    assert "     2  /Home/Decor" in out
+    assert "(none)" in out
+
+
+def test_store_types_are_unique_and_priced():
+    from catalog.abo import CATEGORY_BY_TYPE
+    from catalog.pricing import PRICE_RANGE_INR
+
+    assert set(CATEGORY_BY_TYPE.values()) <= set(PRICE_RANGE_INR)
+
+
 def test_bigquery_schema_builds():
     pytest.importorskip("google.cloud.bigquery")
     schema = load_bigquery.bigquery_schema()
